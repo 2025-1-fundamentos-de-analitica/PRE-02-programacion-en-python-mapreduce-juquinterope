@@ -5,8 +5,8 @@
 import fileinput
 import glob
 import os.path
-import time
 from itertools import groupby
+import time
 
 
 #
@@ -19,6 +19,18 @@ from itertools import groupby
 #
 def copy_raw_files_to_input_folder(n):
     """Funcion copy_files"""
+
+    if not os.path.exists("files/input"):
+        os.makedirs("files/input")
+    for file in glob.glob("files/raw/*"):
+        for i in range(1, n + 1):
+            with open(file, "r", encoding="utf-8") as f:
+                with open(
+                    f"files/input/{os.path.basename(file).split('.')[0]}_{i}.txt",
+                    "w",
+                    encoding="utf-8",
+                ) as f2:
+                    f2.write(f.read())
 
 
 #
@@ -38,6 +50,19 @@ def copy_raw_files_to_input_folder(n):
 #
 def load_input(input_directory):
     """Funcion load_input"""
+    
+    # Lista vacia para almacenar las tuplas
+    lines = []
+
+    for filename in os.listdir(input_directory):
+        filepath = os.path.join(input_directory, filename)
+        # Verifica que el archivo exite
+        if os.path.isfile(filepath):
+            with open(filepath, 'r') as file:
+                for line in file:
+                    lines.append((filename, line))
+
+    return lines
 
 
 #
@@ -47,6 +72,17 @@ def load_input(input_directory):
 #
 def line_preprocessing(sequence):
     """Line Preprocessing"""
+    lines = []
+    for filename, line in sequence:
+        # Eliminar espacios en blanco al inicio y al final
+        line = line.strip()
+        # Eliminar caracteres especiales
+        line = ''.join(e for e in line if e.isalnum() or e.isspace())
+        # Convertir a minúsculas
+        line = line.lower()
+        lines.append((filename, line))
+
+    return lines
 
 
 #
@@ -63,6 +99,15 @@ def line_preprocessing(sequence):
 #
 def mapper(sequence):
     """Mapper"""
+    # Lista vacia para almacenar las tuplas
+    words = []
+
+    for filename, line in sequence:
+        # Separar la linea en palabras
+        for word in line.split():
+            words.append((word, 1))
+
+    return words
 
 
 #
@@ -78,6 +123,9 @@ def mapper(sequence):
 #
 def shuffle_and_sort(sequence):
     """Shuffle and Sort"""
+    # Ordenar la lista de tuplas por la clave (palabra)
+    sequence.sort(key=lambda x: x[0])
+    return sequence
 
 
 #
@@ -88,6 +136,15 @@ def shuffle_and_sort(sequence):
 #
 def reducer(sequence):
     """Reducer"""
+    # Lista vacia para almacenar las tuplas
+    result = []
+
+    # Agrupar por clave (palabra) y sumar los valores
+    for key, group in groupby(sequence, key=lambda x: x[0]):
+        count = sum(value for _, value in group)
+        result.append((key, count))
+
+    return result
 
 
 #
@@ -96,6 +153,14 @@ def reducer(sequence):
 #
 def create_ouptput_directory(output_directory):
     """Create Output Directory"""
+    # Verifica si el directorio ya existe
+    if os.path.exists(output_directory):
+        # Si existe se borra
+        for filename in glob.glob(os.path.join(output_directory, '*')):
+            os.remove(filename)
+    else:
+        # Si no existe se crea
+        os.makedirs(output_directory)
 
 
 #
@@ -108,6 +173,9 @@ def create_ouptput_directory(output_directory):
 #
 def save_output(output_directory, sequence):
     """Save Output"""
+    with open(os.path.join(output_directory, 'part-00000'), 'w') as file:
+        for key, value in sequence:
+            file.write(f"{key}\t{value}\n")
 
 
 #
@@ -116,6 +184,8 @@ def save_output(output_directory, sequence):
 #
 def create_marker(output_directory):
     """Create Marker"""
+    with open(os.path.join(output_directory, '_SUCCESS'), 'w') as file:
+        file.write('')
 
 
 #
@@ -123,10 +193,26 @@ def create_marker(output_directory):
 #
 def run_job(input_directory, output_directory):
     """Job"""
+    # Crea el directorio de salida
+    create_ouptput_directory(output_directory)
+
+    # Carga los archivos de texto
+    lineas = load_input(input_directory)
+    preprocesadas = line_preprocessing(lineas)
+
+    # Mapea y agrupa las lineas
+    map = mapper(preprocesadas)
+    agrupadas = shuffle_and_sort(map)
+
+    # Reduce las lineas
+    reducidas = reducer(agrupadas)
+
+    # Guarda el resultado en un archivo de texto
+    save_output(output_directory, reducidas)
+    create_marker(output_directory)
 
 
 if __name__ == "__main__":
-
     copy_raw_files_to_input_folder(n=1000)
 
     start_time = time.time()
@@ -137,4 +223,6 @@ if __name__ == "__main__":
     )
 
     end_time = time.time()
+
+    # Imprime el tiempo de ejecución
     print(f"Tiempo de ejecución: {end_time - start_time:.2f} segundos")
